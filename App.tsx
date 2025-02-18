@@ -3,22 +3,27 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+
+// Import your existing screens
 import HomeScreen from './screens/HomeScreen';
 import LocationGridScreen from './screens/LocationGridScreen';
 import CategoryDetailsScreen from './screens/CategoryDetailsScreen';
 
+// Import the new chat screens
+import GroupsListScreen from './screens/GroupsListScreen';
+import CreateGroupScreen from './screens/CreateGroupScreen';
+import GroupChatScreen from './screens/GroupChatScreen';
+
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// A nested stack that holds the grid + details
-// In your stack, set headerShown: true (or remove the line that sets it to false)
+/**
+ * 1) A nested stack for “Locations”
+ *    (LocationGridScreen + CategoryDetailsScreen)
+ */
 function LocationStack() {
     return (
-        <Stack.Navigator
-            screenOptions={{
-                headerShown: true, // <-- show the default header with a back button
-            }}
-        >
+        <Stack.Navigator screenOptions={{ headerShown: true }}>
             <Stack.Screen
                 name="LocationGrid"
                 component={LocationGridScreen}
@@ -33,6 +38,31 @@ function LocationStack() {
     );
 }
 
+/**
+ * 2) A nested stack for “Chat”
+ *    (GroupsListScreen + CreateGroupScreen + GroupChatScreen)
+ */
+function ChatStack() {
+    return (
+        <Stack.Navigator screenOptions={{ headerShown: true }}>
+            <Stack.Screen
+                name="GroupsList"
+                component={GroupsListScreen}
+                options={{ title: 'Chat Groups' }}
+            />
+            <Stack.Screen
+                name="CreateGroup"
+                component={CreateGroupScreen}
+                options={{ title: 'Create a Group' }}
+            />
+            <Stack.Screen
+                name="GroupChat"
+                component={GroupChatScreen}
+                options={{ title: 'Group Chat' }}
+            />
+        </Stack.Navigator>
+    );
+}
 
 export default function App() {
     return (
@@ -41,7 +71,7 @@ export default function App() {
                 screenOptions={{
                     tabBarActiveTintColor: '#007bff',
                     tabBarInactiveTintColor: '#555',
-                    headerShown: false, // Hide default headers for tab screens
+                    headerShown: false,
                 }}
             >
                 <Tab.Screen
@@ -49,11 +79,15 @@ export default function App() {
                     component={HomeScreen}
                     options={{ title: 'Home' }}
                 />
-                {/* Our nested stack for the location screens */}
                 <Tab.Screen
                     name="Locations"
                     component={LocationStack}
                     options={{ title: 'Locations' }}
+                />
+                <Tab.Screen
+                    name="ChatTab"
+                    component={ChatStack}
+                    options={{ title: 'Chat' }}
                 />
             </Tab.Navigator>
         </NavigationContainer>
