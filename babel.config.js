@@ -10,7 +10,7 @@ module.exports = function (api) {
                     moduleName: '@env',
                     path: '.env',
                     blocklist: null,
-                    allowlist: ['GOOGLE_API_KEY', 'OPENWEATHER_API_KEY', 'NEWSAPI_KEY'],
+                    allowlist: ['GOOGLE_API_KEY', 'OPENWEATHER_API_KEY', 'NEWSAPI_KEY', 'OPENAI_API_KEY'],
                     safe: false,
                     allowUndefined: true,
                 },
