@@ -6,29 +6,44 @@ import {
     Text,
     StyleSheet,
     ActivityIndicator,
-    Image,
     TouchableOpacity,
     FlatList,
 } from 'react-native';
-import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
+import { getAuth } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
+// Vector icons
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+/**
+ * CategoryItem defines the shape of each category:
+ *  - key: string
+ *  - label: string (the text displayed)
+ *  - iconName: name of the MaterialCommunityIcons icon
+ */
 type CategoryItem = {
-    key: string;    // e.g. 'gyms'
-    label: string;  // e.g. 'Gyms'
-    icon: any;      // local image or icon reference
+    key: string;
+    label: string;
+    iconName: string;
 };
 
+/**
+ * We define our categories with iconName matching MaterialCommunityIcons names.
+ * For example, see https://materialdesignicons.com/ for valid names.
+ * Adjust iconName as needed for your categories.
+ */
 const CATEGORIES: CategoryItem[] = [
-    { key: 'gyms', label: 'Gyms', icon: require('../assets/location/gymIcon.png') },
-    { key: 'yoga', label: 'Yoga', icon: require('../assets/location/yogaIcon.png') },
-    { key: 'crossfit', label: 'CrossFit', icon: require('../assets/location/crossfitIcon.png') },
-    { key: 'hostels', label: 'Hostels', icon: require('../assets/location/hostelIcon.png') },
-    { key: 'hotels', label: 'Hotels', icon: require('../assets/location/hotelIcon.png') },
-    { key: 'restaurants', label: 'Restaurants', icon: require('../assets/location/restaurantIcon.png') },
-    { key: 'cafes', label: 'Cafés', icon: require('../assets/location/cafeIcon.png') },
-    { key: 'beach', label: 'Beach', icon: require('../assets/location/beachIcon.png') },
-    { key: 'supermarket', label: 'Supermarket', icon: require('../assets/location/supermarketIcon.png') },
+    { key: 'gyms', label: 'Gyms', iconName: 'dumbbell' },
+    { key: 'yoga', label: 'Yoga', iconName: 'yoga' },
+    { key: 'crossfit', label: 'CrossFit', iconName: 'weight-lifter' },
+    { key: 'hostels', label: 'Hostels', iconName: 'home-group' },
+    { key: 'hotels', label: 'Hotels', iconName: 'bed' },
+    { key: 'restaurants', label: 'Restaurants', iconName: 'silverware-fork-knife' },
+    { key: 'cafes', label: 'Cafés', iconName: 'coffee' },
+    { key: 'beach', label: 'Beach', iconName: 'beach' },
+    { key: 'supermarket', label: 'Supermarket', iconName: 'cart' },
 ];
 
 export default function LocationGridScreen() {
@@ -36,38 +51,67 @@ export default function LocationGridScreen() {
     const [errorMessage, setErrorMessage] = useState('');
     const [userLat, setUserLat] = useState<number | null>(null);
     const [userLng, setUserLng] = useState<number | null>(null);
+
     const navigation = useNavigation();
 
     useEffect(() => {
         (async () => {
             try {
-                const { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    setErrorMessage('Location permission denied. Please enable location services.');
+                // 1) Get current user from Firebase Auth
+                const auth = getAuth();
+                const currentUser = auth.currentUser;
+                if (!currentUser) {
+                    setErrorMessage('No current user found. Please log in.');
                     setLoading(false);
                     return;
                 }
-                const location = await Location.getCurrentPositionAsync({});
-                setUserLat(location.coords.latitude);
-                setUserLng(location.coords.longitude);
+
+                // 2) Read user doc in Firestore to get lat & lng
+                const uid = currentUser.uid;
+                const userRef = doc(db, 'users', uid);
+                const snapshot = await getDoc(userRef);
+
+                if (!snapshot.exists()) {
+                    setErrorMessage('User doc not found in Firestore.');
+                    setLoading(false);
+                    return;
+                }
+
+                const data = snapshot.data();
+                const lat = data?.lat;
+                const lng = data?.lng;
+
+                if (lat == null || lng == null) {
+                    // If lat/lng are missing in the user doc
+                    setErrorMessage('No lat/lng stored in your profile.');
+                    setLoading(false);
+                    return;
+                }
+
+                // We have lat/lng
+                setUserLat(lat);
+                setUserLng(lng);
                 setLoading(false);
+
             } catch (error) {
-                console.error('Error obtaining location:', error);
-                setErrorMessage('Error fetching location.');
+                console.error('Error reading user doc for lat/lng:', error);
+                setErrorMessage('Error loading location from your user profile.');
                 setLoading(false);
             }
         })();
     }, []);
 
+    // If still loading
     if (loading) {
         return (
             <View style={styles.loaderContainer}>
                 <ActivityIndicator size="large" color="#007bff" />
-                <Text style={styles.loadingText}>Fetching location...</Text>
+                <Text style={styles.loadingText}>Loading your location...</Text>
             </View>
         );
     }
 
+    // If there's an error (missing lat/lng or doc not found)
     if (errorMessage) {
         return (
             <View style={styles.errorContainer}>
@@ -76,6 +120,10 @@ export default function LocationGridScreen() {
         );
     }
 
+    /**
+     * Pressing a category navigates to CategoryDetails
+     * with the categoryKey plus userLat/userLng
+     */
     const handleCategoryPress = (categoryKey: string) => {
         navigation.navigate('CategoryDetails' as never, {
             categoryKey,
@@ -84,9 +132,17 @@ export default function LocationGridScreen() {
         } as never);
     };
 
+    /**
+     * Renders each category as a card with a MaterialCommunityIcons icon
+     */
     const renderCategoryItem = ({ item }: { item: CategoryItem }) => (
         <TouchableOpacity style={styles.categoryCard} onPress={() => handleCategoryPress(item.key)}>
-            <Image source={item.icon} style={styles.categoryIcon} />
+            <MaterialCommunityIcons
+                name={item.iconName}
+                size={60}
+                color="#333"
+                style={styles.iconStyle}
+            />
             <Text style={styles.categoryLabel}>{item.label}</Text>
         </TouchableOpacity>
     );
@@ -109,7 +165,6 @@ const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
         backgroundColor: '#fff',
-        // Apple-like minimal background
     },
     loaderContainer: {
         flex: 1,
@@ -117,7 +172,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     loadingText: {
-        marginTop: 10,
+        marginTop: 8,
         fontSize: 16,
         color: '#555',
     },
@@ -135,15 +190,13 @@ const styles = StyleSheet.create({
     gridContainer: {
         paddingBottom: 24,
         paddingHorizontal: 16,
-        // Slight extra bottom padding for nicer scroll
     },
     columnWrapper: {
         justifyContent: 'space-between',
         marginBottom: 16,
     },
     categoryCard: {
-        // More "Apple-like" minimal styling
-        width: '48%', // for 2 columns with some gap
+        width: '48%',
         backgroundColor: '#fafafa',
         borderRadius: 14,
         borderWidth: 0.5,
@@ -151,17 +204,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 20,
         paddingHorizontal: 10,
-        // Very subtle shadow for a raised look
         shadowColor: '#000',
         shadowOpacity: 0.05,
         shadowRadius: 5,
         shadowOffset: { width: 0, height: 3 },
     },
-    categoryIcon: {
-        width: 80,
-        height: 80,
+    iconStyle: {
         marginBottom: 12,
-        resizeMode: 'cover', // Fill more space
     },
     categoryLabel: {
         fontSize: 17,

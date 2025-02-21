@@ -1,5 +1,7 @@
+// screens/GroupsListScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
+    SafeAreaView,
     View,
     Text,
     StyleSheet,
@@ -8,7 +10,9 @@ import {
     ActivityIndicator,
     Alert
 } from 'react-native';
-import * as Location from 'expo-location';
+import { useNavigation } from '@react-navigation/native';
+import { getAuth } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import {
     collection,
     onSnapshot,
@@ -18,14 +22,8 @@ import {
     addDoc,
     serverTimestamp
 } from 'firebase/firestore';
-import { useNavigation } from '@react-navigation/native';
 import { db } from '../firebaseConfig';
 
-// Import your fetchCityName from the snippet you provided:
-import { fetchCityName } from '../api';
-// ^ Adjust path to wherever that snippet is stored.
-
-// Some default group templates
 const DEFAULT_GROUPS = [
     (city: string) => ({ name: `General Chat (${city})`, city }),
     (city: string) => ({ name: `Foodies in ${city}`, city }),
@@ -42,66 +40,67 @@ type Group = {
 
 export default function GroupsListScreen() {
     const navigation = useNavigation();
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+
     const [groups, setGroups] = useState<Group[]>([]);
     const [loading, setLoading] = useState(true);
     const [userCity, setUserCity] = useState<string | null>(null);
 
     useEffect(() => {
-        // Step 1) Get user location (lat/lng)
         (async () => {
+            if (!currentUser) {
+                Alert.alert('Error', 'No current user found. Are you logged in?');
+                setLoading(false);
+                return;
+            }
+
+            // 1) Read user doc to get city
+            const uid = currentUser.uid;
+            const userRef = doc(db, 'users', uid);
             try {
-                const { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    Alert.alert('Permission Denied', 'Location permission is required to fetch city.');
+                const snapshot = await getDoc(userRef);
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    const city = data.city;
+                    if (!city) {
+                        Alert.alert('No City Found', 'We do not have a city stored for your account.');
+                        setLoading(false);
+                        return;
+                    }
+                    setUserCity(city);
+                    // 2) fetch groups for that city
+                    fetchCityGroups(city);
+                } else {
+                    Alert.alert('Error', 'User doc not found.');
                     setLoading(false);
-                    return;
                 }
-
-                const loc = await Location.getCurrentPositionAsync({});
-                const { latitude, longitude } = loc.coords;
-
-                // Step 2) Use fetchCityName from your snippet to get city
-                const cityName = await fetchCityName(latitude, longitude);
-                if (!cityName) {
-                    Alert.alert('Error', 'Could not determine city from location.');
-                    setLoading(false);
-                    return;
-                }
-
-                setUserCity(cityName);
-
-                // Step 3) Now that we have cityName, fetch the groups from Firestore
-                fetchCityGroups(cityName);
-            } catch (error) {
-                console.error('Error obtaining location:', error);
-                Alert.alert('Error', 'Error fetching location or city.');
+            } catch (err) {
+                console.error('Error fetching user doc:', err);
+                Alert.alert('Error', 'Could not load user city.');
                 setLoading(false);
             }
         })();
-    }, []);
+    }, [currentUser]);
 
     /**
-     * Fetch city-based groups from Firestore
+     * Query Firestore for groups where city == userCity
      */
     function fetchCityGroups(cityName: string) {
         const groupsRef = collection(db, 'chat', 'master', 'groups');
-        const qCity = query(
-            groupsRef,
-            where('city', '==', cityName),
-            orderBy('createdAt', 'desc')
-        );
+        const qCity = query(groupsRef, where('city', '==', cityName), orderBy('createdAt', 'desc'));
 
         const unsubscribe = onSnapshot(
             qCity,
             async (snapshot) => {
                 const list: Group[] = [];
-                snapshot.forEach((doc) => {
-                    list.push({ id: doc.id, ...doc.data() } as Group);
+                snapshot.forEach((docSnap) => {
+                    list.push({ id: docSnap.id, ...docSnap.data() } as Group);
                 });
                 setGroups(list);
                 setLoading(false);
 
-                // If no groups exist for this city, create default ones
+                // If no groups exist for this city, create default
                 if (list.length === 0) {
                     await createDefaultGroupsForCity(cityName);
                 }
@@ -113,7 +112,6 @@ export default function GroupsListScreen() {
             }
         );
 
-        // Cleanup if the component unmounts
         return unsubscribe;
     }
 
@@ -138,62 +136,70 @@ export default function GroupsListScreen() {
     }
 
     const handleCreateGroup = () => {
-        // Navigate to CreateGroup screen
         navigation.navigate('CreateGroup' as never);
     };
 
     const handlePressGroup = (groupId: string) => {
-        // Navigate to GroupChat screen with the group ID
         navigation.navigate('GroupChat' as never, { groupId } as never);
     };
 
     if (loading) {
         return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#007bff" />
-                <Text>Determining city and loading groups...</Text>
-            </View>
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.loaderContainer}>
+                    <ActivityIndicator size="large" color="#007bff" />
+                    <Text>Loading groups for your city...</Text>
+                </View>
+            </SafeAreaView>
         );
     }
 
     if (!userCity) {
         return (
-            <View style={styles.loaderContainer}>
-                <Text>Could not determine city from location.</Text>
-            </View>
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.loaderContainer}>
+                    <Text>No city found in your profile.</Text>
+                </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.cityTitle}>Groups in {userCity}</Text>
+        <SafeAreaView style={styles.safeArea}>
+            <View style={styles.container}>
+                <Text style={styles.cityTitle}>Groups in {userCity}</Text>
 
-            <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
-                <Text style={styles.createButtonText}>+ Create Group</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
+                    <Text style={styles.createButtonText}>+ Create Group</Text>
+                </TouchableOpacity>
 
-            {groups.length === 0 ? (
-                <Text style={styles.noGroupsText}>No groups found for {userCity} yet...</Text>
-            ) : (
-                <FlatList
-                    data={groups}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity
-                            style={styles.groupItem}
-                            onPress={() => handlePressGroup(item.id)}
-                        >
-                            <Text style={styles.groupName}>{item.name}</Text>
-                            {item.city && <Text style={styles.cityName}>City: {item.city}</Text>}
-                        </TouchableOpacity>
-                    )}
-                />
-            )}
-        </View>
+                {groups.length === 0 ? (
+                    <Text style={styles.noGroupsText}>No groups found for {userCity} yet...</Text>
+                ) : (
+                    <FlatList
+                        data={groups}
+                        keyExtractor={(item) => item.id}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                style={styles.groupItem}
+                                onPress={() => handlePressGroup(item.id)}
+                            >
+                                <Text style={styles.groupName}>{item.name}</Text>
+                                {item.city && <Text style={styles.cityName}>City: {item.city}</Text>}
+                            </TouchableOpacity>
+                        )}
+                    />
+                )}
+            </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
     container: {
         flex: 1,
         padding: 16,
