@@ -2,7 +2,8 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFirestore } from 'firebase/firestore';;
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Use your Firebase v11 config object here
 const firebaseConfig = {
@@ -19,3 +20,5 @@ export const db = getFirestore(app);
 export const auth = initializeAuth(app, {
     persistence: getReactNativePersistence(AsyncStorage)
 });
+export const storage = getStorage(app);
+

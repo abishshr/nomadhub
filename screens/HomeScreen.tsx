@@ -1,6 +1,7 @@
 // screens/HomeScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
+    SafeAreaView,
     View,
     Text,
     FlatList,
@@ -12,7 +13,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { fetchCityName, fetchWeatherByCity, fetchLocalNews } from '../api'; // Adjust path as needed
+import { fetchCityName, fetchWeatherByCity, fetchLocalNews } from '../api'; // Adjust path if needed
 
 const { width } = Dimensions.get('window');
 
@@ -28,7 +29,7 @@ type NewsItem = {
     urlToImage?: string;
 };
 
-const HomeScreen: React.FC = () => {
+export default function HomeScreen() {
     const [loading, setLoading] = useState(true);
     const [city, setCity] = useState<string>('');
     const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -89,75 +90,82 @@ const HomeScreen: React.FC = () => {
 
     if (loading) {
         return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#007bff" />
-                <Text style={styles.loadingText}>Loading data...</Text>
-            </View>
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.loaderContainer}>
+                    <ActivityIndicator size="large" color="#007bff" />
+                    <Text style={styles.loadingText}>Loading data...</Text>
+                </View>
+            </SafeAreaView>
         );
     }
 
     if (errorMessage) {
         return (
-            <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={initializeLocationAndData}>
-                    <Text style={styles.retryButtonText}>Retry</Text>
-                </TouchableOpacity>
-            </View>
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={initializeLocationAndData}>
+                        <Text style={styles.retryButtonText}>Retry</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search (e.g., 'café', 'gym')"
-                    placeholderTextColor="#999"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    onSubmitEditing={() => {
-                        // Future: fetch places based on searchQuery and user location
-                    }}
-                />
-            </View>
-
-            <Text style={styles.title}>Welcome to {city}!</Text>
-
-            {weather ? (
-                <View style={styles.weatherSection}>
-                    <Image source={{ uri: weather.icon }} style={styles.weatherIcon} />
-                    <View>
-                        <Text style={styles.weatherTemp}>{Math.round(weather.temp)}°C</Text>
-                        <Text style={styles.weatherDesc}>{weather.description}</Text>
-                    </View>
+        <SafeAreaView style={styles.safeArea}>
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search (e.g., 'café', 'gym')"
+                        placeholderTextColor="#999"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        onSubmitEditing={() => {
+                            // Future: fetch places based on searchQuery and user location
+                        }}
+                    />
                 </View>
-            ) : (
-                <Text style={styles.noWeatherText}>Weather information not available.</Text>
-            )}
 
-            <Text style={styles.sectionTitle}>Local News</Text>
-            {news.length > 0 ? (
-                <FlatList
-                    data={news}
-                    keyExtractor={(item, index) => `news-${index}`}
-                    renderItem={renderNewsItem}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.newsListContent}
-                />
-            ) : (
-                <Text style={styles.noNewsText}>No news found for this location.</Text>
-            )}
-        </View>
+                <Text style={styles.title}>Welcome to {city}!</Text>
+
+                {weather ? (
+                    <View style={styles.weatherSection}>
+                        <Image source={{ uri: weather.icon }} style={styles.weatherIcon} />
+                        <View>
+                            <Text style={styles.weatherTemp}>{Math.round(weather.temp)}°C</Text>
+                            <Text style={styles.weatherDesc}>{weather.description}</Text>
+                        </View>
+                    </View>
+                ) : (
+                    <Text style={styles.noWeatherText}>Weather information not available.</Text>
+                )}
+
+                <Text style={styles.sectionTitle}>Local News</Text>
+                {news.length > 0 ? (
+                    <FlatList
+                        data={news}
+                        keyExtractor={(item, index) => `news-${index}`}
+                        renderItem={renderNewsItem}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.newsListContent}
+                    />
+                ) : (
+                    <Text style={styles.noNewsText}>No news found for this location.</Text>
+                )}
+            </View>
+        </SafeAreaView>
     );
-};
-
-export default HomeScreen;
+}
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
         backgroundColor: '#fff',
+    },
+    container: {
+        flex: 1,
         paddingHorizontal: 20,
         paddingTop: 20,
     },

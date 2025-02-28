@@ -10,6 +10,7 @@
     "types/**/*",
     "utils/**/*",
     "types.d.ts",
-    "env.d.ts"
+    "env.d.ts",
+    "questions/**/*"
   ]
 }

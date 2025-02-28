@@ -19,6 +19,7 @@ import GroupsListScreen from './screens/GroupsListScreen';
 import CreateGroupScreen from './screens/CreateGroupScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import DatingScreen from './screens/DatingScreen';
 
 // Vector icons from @expo/vector-icons (included in Expo)
 import { Ionicons } from '@expo/vector-icons';
@@ -90,6 +91,8 @@ function MainTab() {
                         iconName = 'chatbubble-ellipses-outline';
                     } else if (route.name === 'Profile') {
                         iconName = 'person-outline';
+                    } else if (route.name === 'Dating') {
+                        iconName = 'heart-outline';
                     }
 
                     // Return Ionicons
@@ -101,6 +104,7 @@ function MainTab() {
             <Tab.Screen name="Locations" component={LocationStack} />
             <Tab.Screen name="ChatTab" component={ChatStack} />
             <Tab.Screen name="Profile" component={ProfileScreen} />
+            <Tab.Screen name="Dating" component={DatingScreen} />
         </Tab.Navigator>
     );
 }
