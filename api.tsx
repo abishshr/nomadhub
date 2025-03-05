@@ -60,6 +60,45 @@ export async function fetchWeatherByCity(city: string): Promise<WeatherData | nu
 }
 
 /**
+ * Fetch air pollution data (AQI and PM2.5) for a given city.
+ * @param city Name of the city.
+ * @returns An object containing aqi and pm2_5, or null values if error occurs.
+ */
+export async function fetchAirPollutionByCity(city: string): Promise<{ aqi: number | null; pm2_5: number | null }> {
+    // First, get the city's coordinates using the weather API
+    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${OPENWEATHER_API_KEY}`;
+    try {
+        const weatherResponse = await axios.get(weatherUrl);
+        if (weatherResponse.data && weatherResponse.data.coord) {
+            const { lat, lon } = weatherResponse.data.coord;
+            // Now, fetch air pollution data
+            const airUrl = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}`;
+            const airResponse = await axios.get(airUrl);
+            if (
+                airResponse.data &&
+                airResponse.data.list &&
+                airResponse.data.list.length > 0 &&
+                airResponse.data.list[0].main &&
+                typeof airResponse.data.list[0].main.aqi !== 'undefined' &&
+                airResponse.data.list[0].components &&
+                typeof airResponse.data.list[0].components.pm2_5 !== 'undefined'
+            ) {
+                return {
+                    aqi: airResponse.data.list[0].main.aqi,
+                    pm2_5: airResponse.data.list[0].components.pm2_5,
+                };
+            }
+        }
+        return { aqi: null, pm2_5: null };
+    } catch (error) {
+        console.error('Error fetching air pollution data:', error);
+        return { aqi: null, pm2_5: null };
+    }
+}
+
+
+
+/**
  * Fetch local news for a given city.
  * @param city Name of the city.
  * @returns An array of news articles or an empty array if an error occurs.

@@ -1,3 +1,4 @@
+// screens/ProfileScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
     SafeAreaView,
@@ -9,6 +10,7 @@ import {
     Alert,
     TouchableOpacity,
     ScrollView,
+    Dimensions,
 } from 'react-native';
 import { getAuth, signOut } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -16,8 +18,11 @@ import { db, storage } from '../firebaseConfig';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-type UserProfile = {
+const { width } = Dimensions.get('window');
+
+export type UserProfile = {
     name?: string;
     photoURL?: string;
     additionalPhotos?: string[];
@@ -29,6 +34,11 @@ type UserProfile = {
     lifestyle?: Record<string, unknown>;
     personality?: string[];
     lookingFor?: string;
+    relationshipGoals?: string;
+    occupation?: string;
+    education?: string;
+    hobbies?: string[];
+    favoriteMovie?: string;
     lat?: number;
     lng?: number;
 };
@@ -77,13 +87,11 @@ export default function ProfileScreen() {
             Alert.alert('Permission Denied', 'We need camera roll permissions!');
             return;
         }
-
         const result = await ImagePicker.launchImageLibraryAsync({
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.7,
         });
-
         if (!result.canceled && result.assets?.[0]?.uri) {
             const { uri } = result.assets[0];
             await uploadImageAndSave(uri, path, field, index);
@@ -98,7 +106,6 @@ export default function ProfileScreen() {
     ) => {
         if (!currentUser) return;
         setUploading(true);
-
         try {
             let localUri = originalUri;
             if (originalUri.startsWith('ph://') || originalUri.startsWith('assets-library://')) {
@@ -106,23 +113,16 @@ export default function ProfileScreen() {
                 await FileSystem.copyAsync({ from: originalUri, to: tempUri });
                 localUri = tempUri;
             }
-
-            // Use fetch -> blob (this approach works for some but can cause issues on iOS bridgeless).
-            // If you still see "Creating blobs from 'ArrayBuffer' not supported," you can fallback to
-            // a base64 decode approach with 'uploadBytes' from a Uint8Array.
             const response = await fetch(localUri);
             const blob = await response.blob();
-
-            const fileName = index !== undefined
-                ? `${currentUser.uid}-${index}.jpg`
-                : `${currentUser.uid}.jpg`;
-
+            const fileName =
+                index !== undefined
+                    ? `${currentUser.uid}-${index}.jpg`
+                    : `${currentUser.uid}-${Date.now()}.jpg`;
             const storageRef = ref(storage, `${path}/${fileName}`);
             await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-
             const downloadURL = await getDownloadURL(storageRef);
             const userRef = doc(db, 'users', currentUser.uid);
-
             if (field === 'photoURL') {
                 await updateDoc(userRef, { [field]: downloadURL });
                 setUserData(prev => ({ ...prev, [field]: downloadURL }));
@@ -130,14 +130,15 @@ export default function ProfileScreen() {
                 const updatedPhotos = [...(userData.additionalPhotos || [])];
                 if (index !== undefined) {
                     updatedPhotos[index] = downloadURL;
-                    await updateDoc(userRef, { [field]: updatedPhotos });
-                    setUserData(prev => ({ ...prev, [field]: updatedPhotos }));
+                } else {
+                    updatedPhotos.push(downloadURL);
                 }
+                await updateDoc(userRef, { [field]: updatedPhotos });
+                setUserData(prev => ({ ...prev, [field]: updatedPhotos }));
             } else {
                 await updateDoc(userRef, { [field]: downloadURL });
                 setUserData(prev => ({ ...prev, [field]: downloadURL }));
             }
-
             Alert.alert('Success', 'Photo updated!');
         } catch (err) {
             console.error('Error uploading image:', err);
@@ -156,18 +157,35 @@ export default function ProfileScreen() {
         }
     };
 
+    // For editing bio – using Alert.prompt (iOS demo; replace with a custom modal for cross-platform)
+    const editBio = () => {
+        Alert.prompt(
+            'Edit Bio',
+            'Enter your new bio:',
+            (text) => {
+                const userRef = doc(db, 'users', currentUser!.uid);
+                updateDoc(userRef, { bio: text })
+                    .then(() => setUserData(prev => ({ ...prev, bio: text })))
+                    .catch((err) => {
+                        console.error('Error updating bio:', err);
+                        Alert.alert('Error', 'Could not update bio.');
+                    });
+            },
+            'plain-text',
+            bio || ''
+        );
+    };
+
     if (loading) {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.loaderContainer}>
-                    {/* Discord-like blurple color */}
                     <ActivityIndicator size="large" color="#5865F2" />
                     <Text style={styles.loaderText}>Loading Profile...</Text>
                 </View>
             </SafeAreaView>
         );
     }
-
     if (error) {
         return (
             <SafeAreaView style={styles.safeArea}>
@@ -190,44 +208,58 @@ export default function ProfileScreen() {
         lifestyle,
         personality,
         lookingFor,
+        relationshipGoals,
+        occupation,
+        education,
+        hobbies,
+        favoriteMovie,
         lat,
         lng,
     } = userData;
 
     return (
         <SafeAreaView style={styles.safeArea}>
+            {/* Header with Logout Icon (Relative Positioning) */}
+            <View style={styles.header}>
+                <View style={styles.headerSpacer} />
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={24} color="#007bff" />
+                </TouchableOpacity>
+            </View>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <View style={styles.container}>
-                    {/* Main Photo */}
-                    {photoURL ? (
-                        <Image source={{ uri: photoURL }} style={styles.avatar} />
-                    ) : (
-                        <View style={[styles.avatar, styles.noAvatar]}>
-                            <Text style={styles.noAvatarText}>No Photo</Text>
-                        </View>
-                    )}
-
-                    {/* Button to change main photo */}
-                    <TouchableOpacity
-                        style={styles.photoButton}
-                        onPress={() => pickImageForField('profilePhotos', 'photoURL')}
-                        disabled={uploading}
-                    >
-                        {uploading ? (
-                            // Show a smaller spinner if uploading
-                            <View style={styles.uploadingRow}>
-                                <ActivityIndicator size="small" color="#5865F2" />
-                                <Text style={styles.photoButtonText}> Uploading...</Text>
-                            </View>
+                    {/* Main Profile Photo with overlay edit icon */}
+                    <View style={styles.photoWrapper}>
+                        {photoURL ? (
+                            <Image source={{ uri: photoURL }} style={styles.avatar} />
                         ) : (
-                            <Text style={styles.photoButtonText}>Change Main Photo</Text>
+                            <View style={[styles.avatar, styles.noAvatar]}>
+                                <Text style={styles.noAvatarText}>No Photo</Text>
+                            </View>
                         )}
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.editIconOverlay}
+                            onPress={() => pickImageForField('profilePhotos', 'photoURL')}
+                        >
+                            <MaterialCommunityIcons name="pencil-outline" size={18} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
 
-                    {/* Additional Photos */}
+                    {/* Name */}
+                    <Text style={styles.nameText}>{name || 'No Name'}</Text>
+
+                    {/* Bio Section with inline edit icon */}
+                    <View style={styles.bioContainer}>
+                        <Text style={styles.bioText}>{bio || 'No bio yet.'}</Text>
+                        <TouchableOpacity style={styles.editBioIcon} onPress={editBio}>
+                            <MaterialCommunityIcons name="pencil-outline" size={16} color="#007bff" />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Additional Photos Grid (with integrated "Add Photo" cell) */}
                     <View style={styles.photoGrid}>
                         {(additionalPhotos || []).map((photoUri, idx) => (
-                            <View key={idx} style={styles.photoSlot}>
+                            <View key={idx} style={styles.photoWrapperSmall}>
                                 {photoUri ? (
                                     <Image source={{ uri: photoUri }} style={styles.additionalPhoto} />
                                 ) : (
@@ -236,67 +268,106 @@ export default function ProfileScreen() {
                                     </View>
                                 )}
                                 <TouchableOpacity
-                                    style={styles.photoButton}
-                                    onPress={() =>
-                                        pickImageForField('additionalPhotos', 'additionalPhotos', idx)
-                                    }
-                                    disabled={uploading}
+                                    style={styles.editIconOverlaySmall}
+                                    onPress={() => pickImageForField('additionalPhotos', 'additionalPhotos', idx)}
                                 >
-                                    {uploading ? (
-                                        <View style={styles.uploadingRow}>
-                                            <ActivityIndicator size="small" color="#5865F2" />
-                                            <Text style={styles.photoButtonText}> ...</Text>
-                                        </View>
-                                    ) : (
-                                        <Text style={styles.photoButtonText}>Change #{idx + 1}</Text>
-                                    )}
+                                    <MaterialCommunityIcons name="pencil-outline" size={14} color="#fff" />
                                 </TouchableOpacity>
                             </View>
                         ))}
+                        {/* "Add Photo" cell integrated into the grid */}
+                        <TouchableOpacity
+                            style={[styles.photoWrapperSmall, styles.addPhotoCell]}
+                            onPress={() => pickImageForField('additionalPhotos', 'additionalPhotos')}
+                            disabled={uploading}
+                        >
+                            <Ionicons name="add-circle-outline" size={24} color="#007bff" />
+                        </TouchableOpacity>
                     </View>
 
-                    {/* Name */}
-                    <Text style={styles.nameText}>{name || 'No Name'}</Text>
-
-                    {/* Bio */}
-                    {bio ? (
-                        <Text style={styles.bioText}>{bio}</Text>
-                    ) : (
-                        <Text style={styles.bioPlaceholder}>No bio yet...</Text>
-                    )}
-
-                    {/* Additional Info */}
+                    {/* Profile Details */}
                     <View style={styles.infoSection}>
-                        {age !== undefined && <Text style={styles.infoText}>Age: {age}</Text>}
-                        {city && <Text style={styles.infoText}>City: {city}</Text>}
-                        {orientation && <Text style={styles.infoText}>Orientation: {orientation}</Text>}
-                        {lookingFor && <Text style={styles.infoText}>Looking For: {lookingFor}</Text>}
-                        {Array.isArray(interests) && interests.length > 0 && (
-                            <Text style={styles.infoText}>
-                                Interests: {interests.join(', ')}
-                            </Text>
+                        {age !== undefined && (
+                            <View style={styles.infoRow}>
+                                <Ionicons name="calendar-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Age: {age}</Text>
+                            </View>
                         )}
-                        {Array.isArray(personality) && personality.length > 0 && (
-                            <Text style={styles.infoText}>
-                                Personality: {personality.join(', ')}
-                            </Text>
+                        {city && (
+                            <View style={styles.infoRow}>
+                                <Ionicons name="location-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> City: {city}</Text>
+                            </View>
+                        )}
+                        {orientation && (
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="account-heart-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Orientation: {orientation}</Text>
+                            </View>
+                        )}
+                        {lookingFor && (
+                            <View style={styles.infoRow}>
+                                <Ionicons name="search-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Looking For: {lookingFor}</Text>
+                            </View>
+                        )}
+                        {interests && interests.length > 0 && (
+                            <View style={styles.infoRow}>
+                                <Ionicons name="pricetags-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Interests: {interests.join(', ')}</Text>
+                            </View>
+                        )}
+                        {personality && personality.length > 0 && (
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="face-profile" size={16} color="#333" />
+                                <Text style={styles.infoText}> Personality: {personality.join(', ')}</Text>
+                            </View>
                         )}
                         {lifestyle && (
-                            <Text style={styles.infoText}>
-                                Lifestyle: {JSON.stringify(lifestyle)}
-                            </Text>
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="home-modern-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Lifestyle: {JSON.stringify(lifestyle)}</Text>
+                            </View>
+                        )}
+                        {relationshipGoals && (
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="heart-multiple-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Relationship Goals: {relationshipGoals}</Text>
+                            </View>
+                        )}
+                        {occupation && (
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="briefcase-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Occupation: {occupation}</Text>
+                            </View>
+                        )}
+                        {education && (
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="school-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Education: {education}</Text>
+                            </View>
+                        )}
+                        {hobbies && hobbies.length > 0 && (
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="run" size={16} color="#333" />
+                                <Text style={styles.infoText}> Hobbies: {hobbies.join(', ')}</Text>
+                            </View>
+                        )}
+                        {favoriteMovie && (
+                            <View style={styles.infoRow}>
+                                <MaterialCommunityIcons name="movie-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}> Favorite Movie: {favoriteMovie}</Text>
+                            </View>
                         )}
                         {lat !== undefined && lng !== undefined && (
-                            <Text style={styles.infoText}>
-                                Coordinates: {lat.toFixed(4)}, {lng.toFixed(4)}
-                            </Text>
+                            <View style={styles.infoRow}>
+                                <Ionicons name="pin-outline" size={16} color="#333" />
+                                <Text style={styles.infoText}>
+                                    Coordinates: {lat.toFixed(4)}, {lng.toFixed(4)}
+                                </Text>
+                            </View>
                         )}
                     </View>
-
-                    {/* Logout */}
-                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                        <Text style={styles.logoutButtonText}>Log Out</Text>
-                    </TouchableOpacity>
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -304,127 +375,80 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    scrollContainer: {
-        paddingBottom: 20,
-    },
-    loaderContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    loaderText: {
-        marginTop: 8,
-        fontSize: 16,
-        color: '#555',
-    },
-    errorText: {
-        color: 'red',
-        fontSize: 16,
-        textAlign: 'center',
-        marginHorizontal: 20,
-    },
-    container: {
-        alignItems: 'center',
-        padding: 20,
-    },
-    avatar: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        marginTop: 20,
-        marginBottom: 8,
-        backgroundColor: '#eee',
-        resizeMode: 'cover',
-    },
-    noAvatar: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    noAvatarText: {
-        color: '#aaa',
-    },
-    photoButton: {
-        backgroundColor: '#5865F2', // Discord blurple color
-        borderRadius: 10,
-        paddingVertical: 6,
-        paddingHorizontal: 14,
-        marginVertical: 6,
-    },
-    uploadingRow: {
+    safeArea: { flex: 1, backgroundColor: '#fff' },
+    scrollContainer: { paddingBottom: 20 },
+    loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loaderText: { marginTop: 8, fontSize: 16, color: '#555' },
+    errorText: { color: 'red', fontSize: 14, textAlign: 'center', marginHorizontal: 20 },
+    container: { alignItems: 'center', padding: 20 },
+    // Header Container with Logout Icon
+    header: {
         flexDirection: 'row',
+        justifyContent: 'flex-end',
         alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
     },
-    photoButtonText: {
-        color: '#fff',
-        fontWeight: '600',
-        fontSize: 14,
+    logoutButton: {
+        // No background color, simple icon
     },
-    photoGrid: {
-        flexDirection: 'row',
+    // Main Profile Photo & Edit Overlay
+    photoWrapper: { position: 'relative' },
+    avatar: { width: 150, height: 150, borderRadius: 10, backgroundColor: '#eee', resizeMode: 'cover' },
+    noAvatar: { justifyContent: 'center', alignItems: 'center' },
+    noAvatarText: { color: '#aaa' },
+    nameText: { fontSize: 20, fontWeight: '600', color: '#333', marginTop: 10 },
+    editIconOverlay: {
+        position: 'absolute',
+        bottom: 4,
+        right: 4,
+        backgroundColor: 'transparent',
+        borderRadius: 20,
+        padding: 4,
+    },
+    // Additional Photos Grid
+    photoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: 15 },
+    photoWrapperSmall: { position: 'relative', margin: 5 },
+    additionalPhoto: { width: 80, height: 80, borderRadius: 8, backgroundColor: 'transparent' },
+    noPhoto: { justifyContent: 'center', alignItems: 'center' },
+    editIconOverlaySmall: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        backgroundColor: 'transparent',
+        borderRadius: 12,
+        padding: 2,
+    },
+    // "Add Photo" Cell integrated into grid
+    addPhotoCell: {
         justifyContent: 'center',
-        flexWrap: 'wrap',
-        marginVertical: 10,
-    },
-    photoSlot: {
         alignItems: 'center',
-        margin: 5,
-    },
-    additionalPhoto: {
         width: 80,
         height: 80,
         borderRadius: 8,
-        backgroundColor: '#eee',
+        borderWidth: 1,
+        borderColor: '#ccc',
     },
-    noPhoto: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    nameText: {
-        fontSize: 22,
-        fontWeight: '600',
-        marginTop: 10,
-        color: '#333',
-    },
-    bioText: {
-        fontSize: 16,
-        color: '#555',
-        textAlign: 'center',
-        marginHorizontal: 30,
-        marginBottom: 20,
-        marginTop: 8,
-    },
-    bioPlaceholder: {
-        fontSize: 16,
-        color: '#aaa',
-        fontStyle: 'italic',
-        textAlign: 'center',
-        marginHorizontal: 30,
-        marginBottom: 20,
-    },
-    infoSection: {
+    // Bio Section
+    bioContainer: {
         width: '100%',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 12,
         marginVertical: 10,
-        paddingHorizontal: 10,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    infoText: {
-        fontSize: 16,
-        color: '#333',
-        marginBottom: 4,
-    },
-    logoutButton: {
-        marginTop: 30,
-        backgroundColor: '#5865F2', // Discord color
-        borderRadius: 10,
-        paddingVertical: 12,
-        paddingHorizontal: 30,
-    },
-    logoutButtonText: {
-        color: '#fff',
-        fontWeight: '600',
-        fontSize: 16,
-    },
+    bioText: { fontSize: 16, color: '#555', textAlign: 'center', marginRight: 8 },
+    editBioIcon: { backgroundColor: 'transparent' },
+    // Info Section for Profile Details
+    infoSection: { width: '100%', marginVertical: 10, paddingHorizontal: 10 },
+    infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+    infoText: { fontSize: 16, color: '#333', marginLeft: 4 },
 });
