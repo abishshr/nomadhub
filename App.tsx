@@ -15,9 +15,11 @@ import RegisterScreen from './screens/RegisterScreen';
 import HomeScreen from './screens/HomeScreen';
 import LocationGridScreen from './screens/LocationGridScreen';
 import CategoryDetailsScreen from './screens/CategoryDetailsScreen';
-import GroupsListScreen from './screens/GroupsListScreen';
-import CreateGroupScreen from './screens/CreateGroupScreen';
+import CommunityGroupsScreen from './screens/CommunityGroupsScreen';
+import CreateChatGroupScreen from './screens/CreateChatGroupScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
+import CreateEventScreen from './screens/CreateEventScreen';
+import EventDetailsScreen from './screens/EventDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import DatingScreen from './screens/DatingScreen';
 
@@ -55,14 +57,17 @@ function LocationStack() {
 }
 
 /**
- * 3) Nested stack for “Chat”
+ * 3) Nested stack for “Chat & Events”
  */
 function ChatStack() {
     return (
         <NestedStack.Navigator screenOptions={{ headerShown: false }}>
-            <NestedStack.Screen name="GroupsList" component={GroupsListScreen} />
-            <NestedStack.Screen name="CreateGroup" component={CreateGroupScreen} />
+            <NestedStack.Screen name="GroupsList" component={CommunityGroupsScreen} />
+            <NestedStack.Screen name="CreateGroup" component={CreateChatGroupScreen} />
             <NestedStack.Screen name="GroupChat" component={GroupChatScreen} />
+            {/* New Event Screens */}
+            <NestedStack.Screen name="CreateEvent" component={CreateEventScreen} />
+            <NestedStack.Screen name="EventDetails" component={EventDetailsScreen} />
         </NestedStack.Navigator>
     );
 }
@@ -76,13 +81,11 @@ function MainTab() {
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
-                tabBarShowLabel: false, // hide text labels
+                tabBarShowLabel: false,
                 tabBarActiveTintColor: '#007bff',
                 tabBarInactiveTintColor: '#555',
-                // Provide a function to map route.name to an icon
                 tabBarIcon: ({ color, size }) => {
                     let iconName: string = 'home';
-
                     if (route.name === 'Home') {
                         iconName = 'home-outline';
                     } else if (route.name === 'Locations') {
@@ -94,8 +97,6 @@ function MainTab() {
                     } else if (route.name === 'Dating') {
                         iconName = 'heart-outline';
                     }
-
-                    // Return Ionicons
                     return <Ionicons name={iconName} size={size} color={color} />;
                 },
             })}
