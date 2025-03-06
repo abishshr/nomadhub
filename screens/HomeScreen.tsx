@@ -10,7 +10,6 @@ import {
     TextInput,
     Dimensions,
     TouchableOpacity,
-    FlatList,
     ActivityIndicator,
     Alert,
 } from 'react-native';
@@ -46,25 +45,32 @@ type VisaOption = {
     countries: string;
 };
 
-// Memoized SearchInput component
+// Memoized SearchInput component – keeps search input behavior unchanged
 const SearchInput = memo(
-    ({ value, onChangeText }: { value: string; onChangeText: (text: string) => void }) => {
-        return (
-            <TextInput
-                style={styles.searchInput}
-                placeholder="Search for places..."
-                placeholderTextColor="#aaa"
-                value={value}
-                onChangeText={onChangeText}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus={true}
-            />
-        );
-    }
+    ({ value, onChangeText }: { value: string; onChangeText: (text: string) => void }) => (
+        <TextInput
+            style={styles.searchInput}
+            placeholder="Search for anything in your current city..."
+            placeholderTextColor="#aaa"
+            value={value}
+            onChangeText={onChangeText}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus={false}
+        />
+    )
 );
 
-// Memoized Header component
+// Memoized SearchResultCard – displays a single search result in a card with an icon
+const SearchResultCard = memo(({ result }: { result: string }) => (
+    <View style={styles.searchResultCard}>
+        <Ionicons name="location-outline" size={20} color="#007bff" style={styles.searchResultIcon} />
+        <Text style={styles.searchResultCardText}>{result}</Text>
+    </View>
+));
+
+// Memoized HeaderComponent – renders the search input, search button, welcome message,
+// info card, and the search results as vertical cards.
 const HeaderComponent = memo(({
                                   searchQuery,
                                   city,
@@ -72,7 +78,7 @@ const HeaderComponent = memo(({
                                   airPollution,
                                   searchResults,
                                   handleSearch,
-                                  setSearchQuery
+                                  setSearchQuery,
                               }: {
     searchQuery: string;
     city: string;
@@ -84,12 +90,18 @@ const HeaderComponent = memo(({
 }) => {
     const getAQIDescription = (aqi: number) => {
         switch (aqi) {
-            case 1: return 'Good';
-            case 2: return 'Fair';
-            case 3: return 'Moderate';
-            case 4: return 'Poor';
-            case 5: return 'Very Poor';
-            default: return 'Unknown';
+            case 1:
+                return 'Good';
+            case 2:
+                return 'Fair';
+            case 3:
+                return 'Moderate';
+            case 4:
+                return 'Poor';
+            case 5:
+                return 'Very Poor';
+            default:
+                return 'Unknown';
         }
     };
 
@@ -133,11 +145,11 @@ const HeaderComponent = memo(({
             </View>
             {searchResults.length > 0 && (
                 <View style={styles.searchResultsContainer}>
-                    <Text style={styles.searchResultsTitle}>Search results in {city}:</Text>
+                    <Text style={styles.searchResultsTitle}>
+                        Results :
+                    </Text>
                     {searchResults.map((result, index) => (
-                        <Text key={index} style={styles.searchResultText}>
-                            • {result}
-                        </Text>
+                        <SearchResultCard key={index} result={result} />
                     ))}
                 </View>
             )}
@@ -220,7 +232,11 @@ Only output the JSON array.`;
         try {
             const prompt = `Return a JSON array of search results for local places or services in ${city} regarding "${searchQuery}". Only include results that are relevant to ${city}. Each result should be a short string.`;
             const responseText = await fetchChatGPTResponse(prompt);
-            const results = JSON.parse(responseText) as string[];
+            const parsed = JSON.parse(responseText);
+            // Check if response is an object with a "results" property
+            const results = Array.isArray(parsed)
+                ? parsed
+                : parsed.results || [];
             setSearchResults(results);
         } catch (err) {
             console.error('Error fetching search results:', err);
@@ -265,7 +281,6 @@ Only output the JSON array.`;
                     handleSearch={handleSearch}
                     setSearchQuery={setSearchQuery}
                 />
-
                 <Text style={styles.sectionTitle}>Local News</Text>
                 {featuredNews && (
                     <View style={styles.featuredNewsCard}>
@@ -295,7 +310,6 @@ Only output the JSON array.`;
                         </View>
                     ))}
                 </View>
-
                 <Text style={styles.sectionTitle}>Visa Options</Text>
                 {visaLoading ? (
                     <ActivityIndicator size="small" color="#007bff" />
@@ -303,32 +317,35 @@ Only output the JSON array.`;
                     <Text style={styles.noVisaText}>No visa options found.</Text>
                 ) : (
                     <View style={styles.visaGrid}>
-                        {visaOptions.map((option, index) => (
-                            <View style={styles.visaCard} key={index}>
-                                <View style={styles.visaHeader}>
-                                    <MaterialCommunityIcons name="file-document-outline" size={20} color="#007bff" />
-                                    <Text style={styles.visaCardTitle}>{option.visaType}</Text>
-                                </View>
-                                <View style={styles.visaDetailRow}>
-                                    <Ionicons name="calendar-outline" size={16} color="#222" style={styles.visaIcon} />
-                                    <Text style={styles.visaDetailText}>{option.numberOfDays} days allowed</Text>
-                                </View>
-                                <View style={styles.visaDetailRow}>
-                                    <Ionicons name="checkmark-circle-outline" size={16} color="#222" style={styles.visaIcon} />
-                                    <Text style={styles.visaDetailText}>Eligibility: {option.eligibility}</Text>
-                                </View>
-                                <View style={styles.visaDetailRow}>
-                                    <Ionicons name="flag-outline" size={16} color="#222" style={styles.visaIcon} />
-                                    <Text style={styles.visaDetailText}>Countries: {option.countries}</Text>
-                                </View>
-                            </View>
-                        ))}
+                        {visaOptions.map((option, index) => renderVisaCard(option, index))}
                     </View>
                 )}
             </ScrollView>
         </SafeAreaView>
     );
 }
+
+// Helper function for rendering visa cards
+const renderVisaCard = (item: VisaOption, index: number) => (
+    <View style={styles.visaCard} key={index}>
+        <View style={styles.visaHeader}>
+            <MaterialCommunityIcons name="file-document-outline" size={20} color="#007bff" />
+            <Text style={styles.visaCardTitle}>{item.visaType}</Text>
+        </View>
+        <View style={styles.visaDetailRow}>
+            <Ionicons name="calendar-outline" size={16} color="#222" style={styles.visaIcon} />
+            <Text style={styles.visaDetailText}>{item.numberOfDays} days allowed</Text>
+        </View>
+        <View style={styles.visaDetailRow}>
+            <Ionicons name="checkmark-circle-outline" size={16} color="#222" style={styles.visaIcon} />
+            <Text style={styles.visaDetailText}>Eligibility: {item.eligibility}</Text>
+        </View>
+        <View style={styles.visaDetailRow}>
+            <Ionicons name="flag-outline" size={16} color="#222" style={styles.visaIcon} />
+            <Text style={styles.visaDetailText}>Countries: {item.countries}</Text>
+        </View>
+    </View>
+);
 
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: '#fff' },
@@ -439,11 +456,22 @@ const styles = StyleSheet.create({
     visaDetailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
     visaIcon: { marginRight: 4 },
     visaDetailText: { fontSize: 10, color: '#333' },
-    // Search results container
+    // Search results container – displayed as vertical cards
     searchResultsContainer: { marginTop: 10, paddingHorizontal: 10 },
     searchResultsTitle: { fontSize: 14, fontWeight: '600', color: '#007bff', marginBottom: 4 },
-    searchResultText: { fontSize: 14, color: '#333', marginBottom: 2 },
-    // Header's overall container
+    searchResultCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f7f7f7',
+        borderRadius: 8,
+        padding: 8,
+        marginBottom: 8,
+        elevation: 1,
+    },
+    searchResultIcon: { marginRight: 4 },
+    searchResultCardText: { fontSize: 14, color: '#333' },
+    // Overall header container
     headerContainer: { marginBottom: 30 },
     searchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
 });
+

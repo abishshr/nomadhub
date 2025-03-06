@@ -25,6 +25,7 @@ import DatingScreen from './screens/DatingScreen';
 
 // Vector icons from @expo/vector-icons (included in Expo)
 import { Ionicons } from '@expo/vector-icons';
+import LoadingScreen from "./screens/LoadingScreen";
 
 const Auth = getAuth();
 
@@ -123,12 +124,7 @@ export default function App() {
     }, []);
 
     if (loading) {
-        return (
-            <View style={styles.loader}>
-                <Ionicons name="airplane-outline" size={64} color="#007bff" />
-                <ActivityIndicator size="large" color="#007bff" />
-            </View>
-        );
+        return <LoadingScreen />;
     }
 
     return (
