@@ -125,6 +125,7 @@ export default function App() {
     if (loading) {
         return (
             <View style={styles.loader}>
+                <Ionicons name="airplane-outline" size={64} color="#007bff" />
                 <ActivityIndicator size="large" color="#007bff" />
             </View>
         );

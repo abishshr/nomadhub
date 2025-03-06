@@ -13,9 +13,10 @@ import { useNavigation } from '@react-navigation/native';
 import { getAuth } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import LoadingScreen from './LoadingScreen';
 
 // Vector icons
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
 
 /**
  * CategoryItem defines the shape of each category:
@@ -103,12 +104,7 @@ export default function LocationGridScreen() {
 
     // If still loading
     if (loading) {
-        return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#007bff" />
-                <Text style={styles.loadingText}>Loading your location...</Text>
-            </View>
-        );
+        return <LoadingScreen />;
     }
 
     // If there's an error (missing lat/lng or doc not found)

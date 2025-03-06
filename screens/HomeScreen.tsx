@@ -1,22 +1,29 @@
 // screens/HomeScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, memo, useCallback } from 'react';
 import {
     SafeAreaView,
     View,
     Text,
     ScrollView,
     StyleSheet,
-    ActivityIndicator,
     Image,
     TextInput,
     Dimensions,
     TouchableOpacity,
     FlatList,
+    ActivityIndicator,
+    Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { fetchCityName, fetchWeatherByCity, fetchLocalNews, fetchAirPollutionByCity } from '../api';
+import {
+    fetchCityName,
+    fetchWeatherByCity,
+    fetchLocalNews,
+    fetchAirPollutionByCity,
+} from '../api';
 import { fetchChatGPTResponse } from '../services/ChatGPTService';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import LoadingScreen from './LoadingScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -39,6 +46,105 @@ type VisaOption = {
     countries: string;
 };
 
+// Memoized SearchInput component
+const SearchInput = memo(
+    ({ value, onChangeText }: { value: string; onChangeText: (text: string) => void }) => {
+        return (
+            <TextInput
+                style={styles.searchInput}
+                placeholder="Search for places..."
+                placeholderTextColor="#aaa"
+                value={value}
+                onChangeText={onChangeText}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus={true}
+            />
+        );
+    }
+);
+
+// Memoized Header component
+const HeaderComponent = memo(({
+                                  searchQuery,
+                                  city,
+                                  weather,
+                                  airPollution,
+                                  searchResults,
+                                  handleSearch,
+                                  setSearchQuery
+                              }: {
+    searchQuery: string;
+    city: string;
+    weather: WeatherData | null;
+    airPollution: { aqi: number | null; pm2_5: number | null };
+    searchResults: string[];
+    handleSearch: () => void;
+    setSearchQuery: (text: string) => void;
+}) => {
+    const getAQIDescription = (aqi: number) => {
+        switch (aqi) {
+            case 1: return 'Good';
+            case 2: return 'Fair';
+            case 3: return 'Moderate';
+            case 4: return 'Poor';
+            case 5: return 'Very Poor';
+            default: return 'Unknown';
+        }
+    };
+
+    return (
+        <View style={styles.headerContainer}>
+            <View style={styles.searchRow}>
+                <SearchInput value={searchQuery} onChangeText={setSearchQuery} />
+                <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+                    <Ionicons name="search" size={24} color="#fff" />
+                </TouchableOpacity>
+            </View>
+            <Text style={styles.welcomeTitle}>Welcome to {city}!</Text>
+            <View style={styles.infoCard}>
+                <View style={styles.weatherContainer}>
+                    {weather && (
+                        <>
+                            <Image source={{ uri: weather.icon }} style={styles.weatherIcon} />
+                            <View style={styles.weatherTextContainer}>
+                                <Text style={styles.weatherTemp}>{Math.round(weather.temp)}°C</Text>
+                                <Text style={styles.weatherDesc}>{weather.description}</Text>
+                            </View>
+                        </>
+                    )}
+                </View>
+                <View style={styles.airContainer}>
+                    {airPollution.aqi !== null && (
+                        <View style={styles.airQualityItem}>
+                            <Ionicons name="speedometer-outline" size={20} color="#2ecc71" />
+                            <Text style={styles.airQualityText}>
+                                AQI: {airPollution.aqi} {getAQIDescription(airPollution.aqi)}
+                            </Text>
+                        </View>
+                    )}
+                    {airPollution.pm2_5 !== null && (
+                        <View style={styles.airQualityItem}>
+                            <MaterialCommunityIcons name="smog" size={20} color="#2ecc71" />
+                            <Text style={styles.airQualityText}>PM2.5: {airPollution.pm2_5} μg/m³</Text>
+                        </View>
+                    )}
+                </View>
+            </View>
+            {searchResults.length > 0 && (
+                <View style={styles.searchResultsContainer}>
+                    <Text style={styles.searchResultsTitle}>Search results in {city}:</Text>
+                    {searchResults.map((result, index) => (
+                        <Text key={index} style={styles.searchResultText}>
+                            • {result}
+                        </Text>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+});
+
 export default function HomeScreen() {
     const [loading, setLoading] = useState(true);
     const [city, setCity] = useState<string>('');
@@ -46,8 +152,13 @@ export default function HomeScreen() {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [visaOptions, setVisaOptions] = useState<VisaOption[]>([]);
     const [visaLoading, setVisaLoading] = useState<boolean>(true);
-    const [airPollution, setAirPollution] = useState<{ aqi: number | null; pm2_5: number | null }>({ aqi: null, pm2_5: null });
+    const [airPollution, setAirPollution] = useState<{ aqi: number | null; pm2_5: number | null }>({
+        aqi: null,
+        pm2_5: null,
+    });
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [searchResults, setSearchResults] = useState<string[]>([]);
+    const [searchLoading, setSearchLoading] = useState<boolean>(false);
     const [errorMessage, setErrorMessage] = useState<string>('');
 
     useEffect(() => {
@@ -85,7 +196,6 @@ export default function HomeScreen() {
         }
     };
 
-    // Fetch visa options using ChatGPT API.
     const fetchVisaOptions = async (cityName: string) => {
         try {
             const prompt = `Return a JSON array of digital nomad visa options for someone in ${cityName}. Each object should include:
@@ -104,128 +214,24 @@ Only output the JSON array.`;
         }
     };
 
-    // Helper to convert AQI value to a descriptive text.
-    const getAQIDescription = (aqi: number) => {
-        switch (aqi) {
-            case 1:
-                return 'Good';
-            case 2:
-                return 'Fair';
-            case 3:
-                return 'Moderate';
-            case 4:
-                return 'Poor';
-            case 5:
-                return 'Very Poor';
-            default:
-                return 'Unknown';
+    const handleSearch = useCallback(async () => {
+        if (!searchQuery.trim()) return;
+        setSearchLoading(true);
+        try {
+            const prompt = `Return a JSON array of search results for local places or services in ${city} regarding "${searchQuery}". Only include results that are relevant to ${city}. Each result should be a short string.`;
+            const responseText = await fetchChatGPTResponse(prompt);
+            const results = JSON.parse(responseText) as string[];
+            setSearchResults(results);
+        } catch (err) {
+            console.error('Error fetching search results:', err);
+            Alert.alert('Error', 'Search failed. Please try again.');
+        } finally {
+            setSearchLoading(false);
         }
-    };
-
-    // Header component: includes search, welcome, and a combined weather & air quality card.
-    const HeaderComponent = () => (
-        <View style={styles.headerContainer}>
-            <TextInput
-                style={styles.searchInput}
-                placeholder="Search for places..."
-                placeholderTextColor="#aaa"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-            />
-            <Text style={styles.welcomeTitle}>Welcome to {city}!</Text>
-            <View style={styles.infoCard}>
-                <View style={styles.weatherContainer}>
-                    {weather && (
-                        <>
-                            <Image source={{ uri: weather.icon }} style={styles.weatherIcon} />
-                            <View style={styles.weatherTextContainer}>
-                                <Text style={styles.weatherTemp}>{Math.round(weather.temp)}°C</Text>
-                                <Text style={styles.weatherDesc}>{weather.description}</Text>
-                            </View>
-                        </>
-                    )}
-                </View>
-                <View style={styles.airContainer}>
-                    {airPollution.aqi !== null && (
-                        <View style={styles.airQualityItem}>
-                            <Ionicons name="speedometer-outline" size={20} color="#2ecc71" />
-                            <Text style={styles.airQualityText}>
-                                AQI: {airPollution.aqi} {getAQIDescription(airPollution.aqi)}
-                            </Text>
-                        </View>
-                    )}
-                    {airPollution.pm2_5 !== null && (
-                        <View style={styles.airQualityItem}>
-                            <MaterialCommunityIcons name="smog" size={20} color="#2ecc71" />
-                            <Text style={styles.airQualityText}>PM2.5: {airPollution.pm2_5} μg/m³</Text>
-                        </View>
-                    )}
-                </View>
-            </View>
-        </View>
-    );
-
-    // Render a featured news card (first news item)
-    const renderFeaturedNews = (item: NewsItem) => (
-        <View style={styles.featuredNewsCard} key="featured">
-            {item.urlToImage ? (
-                <Image source={{ uri: item.urlToImage }} style={styles.featuredNewsImage} />
-            ) : (
-                <View style={styles.noImagePlaceholder}>
-                    <Text style={styles.noImageText}>No Image</Text>
-                </View>
-            )}
-            <Text style={styles.featuredNewsTitle}>{item.title}</Text>
-            <Text style={styles.featuredNewsSource}>{item.source.name}</Text>
-        </View>
-    );
-
-    // Render smaller news cards for the remaining items.
-    const renderSmallNewsCard = (item: NewsItem, index: number) => (
-        <View key={index} style={styles.smallNewsCard}>
-            {item.urlToImage ? (
-                <Image source={{ uri: item.urlToImage }} style={styles.smallNewsImage} />
-            ) : (
-                <View style={styles.noImagePlaceholder}>
-                    <Text style={styles.noImageText}>No Image</Text>
-                </View>
-            )}
-            <Text style={styles.smallNewsTitle}>{item.title}</Text>
-            <Text style={styles.featuredNewsSource}>{item.source.name}</Text>
-        </View>
-    );
-
-    // Render visa option card as a box with icons and bullet-style text.
-    const renderVisaCard = (item: VisaOption, index: number) => (
-        <View style={styles.visaCard} key={index}>
-            <View style={styles.visaHeader}>
-                <MaterialCommunityIcons name="file-document-outline" size={20} color="#007bff" />
-                <Text style={styles.visaCardTitle}>{item.visaType}</Text>
-            </View>
-            <View style={styles.visaDetailRow}>
-                <Ionicons name="calendar-outline" size={16} color="#222" style={styles.visaIcon} />
-                <Text style={styles.visaDetailText}>{item.numberOfDays} days allowed</Text>
-            </View>
-            <View style={styles.visaDetailRow}>
-                <Ionicons name="checkmark-circle-outline" size={16} color="#222" style={styles.visaIcon} />
-                <Text style={styles.visaDetailText}>Eligibility: {item.eligibility}</Text>
-            </View>
-            <View style={styles.visaDetailRow}>
-                <Ionicons name="flag-outline" size={16} color="#222" style={styles.visaIcon} />
-                <Text style={styles.visaDetailText}>Countries: {item.countries}</Text>
-            </View>
-        </View>
-    );
+    }, [searchQuery, city]);
 
     if (loading) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color="#007bff" />
-                    <Text style={styles.loadingText}>Loading data...</Text>
-                </View>
-            </SafeAreaView>
-        );
+        return <LoadingScreen />;
     }
     if (errorMessage) {
         return (
@@ -245,13 +251,51 @@ Only output the JSON array.`;
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <ScrollView contentContainerStyle={styles.container}>
-                <HeaderComponent />
+            <ScrollView
+                contentContainerStyle={styles.container}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
+            >
+                <HeaderComponent
+                    searchQuery={searchQuery}
+                    city={city}
+                    weather={weather}
+                    airPollution={airPollution}
+                    searchResults={searchResults}
+                    handleSearch={handleSearch}
+                    setSearchQuery={setSearchQuery}
+                />
+
                 <Text style={styles.sectionTitle}>Local News</Text>
-                {featuredNews && renderFeaturedNews(featuredNews)}
+                {featuredNews && (
+                    <View style={styles.featuredNewsCard}>
+                        {featuredNews.urlToImage ? (
+                            <Image source={{ uri: featuredNews.urlToImage }} style={styles.featuredNewsImage} />
+                        ) : (
+                            <View style={styles.noImagePlaceholder}>
+                                <Text style={styles.noImageText}>No Image</Text>
+                            </View>
+                        )}
+                        <Text style={styles.featuredNewsTitle}>{featuredNews.title}</Text>
+                        <Text style={styles.featuredNewsSource}>{featuredNews.source.name}</Text>
+                    </View>
+                )}
                 <View style={styles.smallNewsGrid}>
-                    {otherNews.map((item, index) => renderSmallNewsCard(item, index))}
+                    {otherNews.map((item, index) => (
+                        <View key={index} style={styles.smallNewsCard}>
+                            {item.urlToImage ? (
+                                <Image source={{ uri: item.urlToImage }} style={styles.smallNewsImage} />
+                            ) : (
+                                <View style={styles.noImagePlaceholder}>
+                                    <Text style={styles.noImageText}>No Image</Text>
+                                </View>
+                            )}
+                            <Text style={styles.smallNewsTitle}>{item.title}</Text>
+                            <Text style={styles.featuredNewsSource}>{item.source.name}</Text>
+                        </View>
+                    ))}
                 </View>
+
                 <Text style={styles.sectionTitle}>Visa Options</Text>
                 {visaLoading ? (
                     <ActivityIndicator size="small" color="#007bff" />
@@ -259,7 +303,26 @@ Only output the JSON array.`;
                     <Text style={styles.noVisaText}>No visa options found.</Text>
                 ) : (
                     <View style={styles.visaGrid}>
-                        {visaOptions.map((option, index) => renderVisaCard(option, index))}
+                        {visaOptions.map((option, index) => (
+                            <View style={styles.visaCard} key={index}>
+                                <View style={styles.visaHeader}>
+                                    <MaterialCommunityIcons name="file-document-outline" size={20} color="#007bff" />
+                                    <Text style={styles.visaCardTitle}>{option.visaType}</Text>
+                                </View>
+                                <View style={styles.visaDetailRow}>
+                                    <Ionicons name="calendar-outline" size={16} color="#222" style={styles.visaIcon} />
+                                    <Text style={styles.visaDetailText}>{option.numberOfDays} days allowed</Text>
+                                </View>
+                                <View style={styles.visaDetailRow}>
+                                    <Ionicons name="checkmark-circle-outline" size={16} color="#222" style={styles.visaIcon} />
+                                    <Text style={styles.visaDetailText}>Eligibility: {option.eligibility}</Text>
+                                </View>
+                                <View style={styles.visaDetailRow}>
+                                    <Ionicons name="flag-outline" size={16} color="#222" style={styles.visaIcon} />
+                                    <Text style={styles.visaDetailText}>Countries: {option.countries}</Text>
+                                </View>
+                            </View>
+                        ))}
                     </View>
                 )}
             </ScrollView>
@@ -270,22 +333,27 @@ Only output the JSON array.`;
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: '#fff' },
     container: { padding: 20, paddingBottom: 40 },
-    loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    loadingText: { marginTop: 10, fontSize: 14, color: '#555' },
     errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
     errorText: { fontSize: 14, color: 'red', textAlign: 'center', marginBottom: 20 },
     retryButton: { backgroundColor: '#007bff', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
     retryButtonText: { color: '#fff', fontWeight: 'bold' },
     headerContainer: { marginBottom: 30 },
+    searchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
     searchInput: {
+        flex: 1,
         padding: 12,
         borderWidth: 1,
         borderColor: '#ddd',
         borderRadius: 10,
         fontSize: 14,
         color: '#333',
-        backgroundColor: '#f9f9f9',
-        marginBottom: 20,
+        backgroundColor: '#fff',
+    },
+    searchButton: {
+        backgroundColor: '#007bff',
+        padding: 12,
+        marginLeft: 10,
+        borderRadius: 10,
     },
     welcomeTitle: { fontSize: 26, fontWeight: 'bold', marginBottom: 20, color: '#222' },
     infoCard: {
@@ -298,6 +366,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         shadowOffset: { width: 0, height: 2 },
+        marginBottom: 20,
     },
     weatherContainer: {
         flex: 1,
@@ -311,15 +380,7 @@ const styles = StyleSheet.create({
     weatherTextContainer: {},
     weatherTemp: { fontSize: 18, fontWeight: 'bold', color: '#222' },
     weatherDesc: { fontSize: 14, color: '#555' },
-    airContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        padding: 12,
-    },
-    airQualityContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-    },
+    airContainer: { flex: 1, justifyContent: 'center', padding: 12 },
     airQualityItem: { flexDirection: 'row', alignItems: 'center' },
     airQualityText: { fontSize: 14, color: '#2ecc71', marginLeft: 4 },
     sectionTitle: { fontSize: 22, fontWeight: 'bold', marginVertical: 15, color: '#222' },
@@ -359,13 +420,7 @@ const styles = StyleSheet.create({
     },
     smallNewsImage: { width: '100%', height: 100, borderRadius: 8, marginBottom: 8, resizeMode: 'cover' },
     smallNewsTitle: { fontSize: 12, fontWeight: '700', color: '#222', marginBottom: 4 },
-    newsSource: { fontSize: 12, color: '#666' },
-    // Visa Grid
-    visaGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-    },
+    visaGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
     visaCard: {
         backgroundColor: '#fff',
         borderRadius: 12,
@@ -384,4 +439,11 @@ const styles = StyleSheet.create({
     visaDetailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
     visaIcon: { marginRight: 4 },
     visaDetailText: { fontSize: 10, color: '#333' },
+    // Search results container
+    searchResultsContainer: { marginTop: 10, paddingHorizontal: 10 },
+    searchResultsTitle: { fontSize: 14, fontWeight: '600', color: '#007bff', marginBottom: 4 },
+    searchResultText: { fontSize: 14, color: '#333', marginBottom: 2 },
+    // Header's overall container
+    headerContainer: { marginBottom: 30 },
+    searchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
 });

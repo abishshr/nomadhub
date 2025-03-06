@@ -23,6 +23,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { db } from '../firebaseConfig';
+import LoadingScreen from "./LoadingScreen";
 
 type RouteParams = {
     groupId: string;
@@ -152,14 +153,7 @@ export default function GroupChatScreen() {
     };
 
     if (loading) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color="#007bff" />
-                    <Text style={styles.loaderText}>Loading messages...</Text>
-                </View>
-            </SafeAreaView>
-        );
+        return <LoadingScreen />;
     }
 
     return (

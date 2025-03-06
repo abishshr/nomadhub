@@ -6,6 +6,7 @@ import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import LoadingScreen from "./LoadingScreen";
 
 export default function EventDetailsScreen() {
     const route = useRoute();
@@ -50,13 +51,7 @@ export default function EventDetailsScreen() {
     };
 
     if (loading || !event) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.loaderContainer}>
-                    <Text>Loading event...</Text>
-                </View>
-            </SafeAreaView>
-        );
+        return <LoadingScreen />;
     }
 
     return (

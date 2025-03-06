@@ -15,6 +15,8 @@ import * as Location from 'expo-location';
 import { GOOGLE_API_KEY } from '@env';
 import { fetchChatGPTResponse } from '../services/ChatGPTService';
 import { haversineDistance } from '../utils/haversine';
+import {Ionicons} from "@expo/vector-icons";
+import LoadingScreen from "./LoadingScreen";
 
 type CategoryDetailsRouteProp = RouteProp<
     { CategoryDetails: { categoryKey?: string } },
@@ -319,12 +321,7 @@ Please summarize these reviews in 2–5 lines total, highlighting main positives
     };
 
     if (loading) {
-        return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#007bff" />
-                <Text style={styles.loadingText}>Loading {categoryKey.toUpperCase()}...</Text>
-            </View>
-        );
+        return <LoadingScreen />;
     }
 
     if (errorMessage) {

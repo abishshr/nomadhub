@@ -27,6 +27,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { getGroupIcon } from '../utils/groupIcons';
+import LoadingScreen from "./LoadingScreen";
 
 const DEFAULT_GROUPS = [
     () => ({ name: 'General Chat', icon: 'chatbubble-ellipses-outline' }),
@@ -185,14 +186,7 @@ export default function CommunityGroupsScreen() {
     };
 
     if (loading) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color="#007bff" />
-                    <Text>Loading...</Text>
-                </View>
-            </SafeAreaView>
-        );
+        return <LoadingScreen />;
     }
 
     if (!userCity) {
@@ -242,7 +236,7 @@ export default function CommunityGroupsScreen() {
                 {/* Upcoming Events Section Header */}
                 <View style={styles.divider} />
                 <View style={styles.sectionHeaderContainer}>
-                    <Text style={styles.sectionHeader}>Upcoming Events</Text>
+                    <Text style={styles.sectionHeader}>Events</Text>
                     <TouchableOpacity style={styles.createIconButton} onPress={handleCreateEvent}>
                         <Ionicons name="add-circle-outline" size={32} color="#28a745" />
                     </TouchableOpacity>

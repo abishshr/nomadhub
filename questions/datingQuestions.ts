@@ -1,4 +1,3 @@
-// questions/datingQuestions.ts
 export type WizardQuestion = {
     field: string;
     question: string;      // The fun, short question text
@@ -7,6 +6,12 @@ export type WizardQuestion = {
 };
 
 export const DATING_QUESTIONS: WizardQuestion[] = [
+    {
+        field: 'gender',
+        question: "What's your gender? (male, female, other)",
+        placeholder: "e.g., male",
+        // parse: (val) => val.toLowerCase().trim(),
+    },
     {
         field: 'age',
         question: "Hey! How young are you feeling these days?",
@@ -24,12 +29,12 @@ export const DATING_QUESTIONS: WizardQuestion[] = [
     {
         field: 'orientation',
         question: "Who are you interested in? (guys/gals/anyone)?",
-        placeholder: "e.g. 'anyone'",
+        placeholder: "e.g., 'anyone'",
     },
     {
         field: 'interests',
         question: "Got any fun hobbies or passions?",
-        placeholder: "e.g. cooking, gaming, reading",
+        placeholder: "e.g., cooking, gaming, reading",
         parse: (val) =>
             val
                 .split(',')
@@ -46,7 +51,28 @@ export const DATING_QUESTIONS: WizardQuestion[] = [
         question: "Tell us one fun fact about you!",
         placeholder: "I can solve a Rubik's Cube in 30s",
     },
-    // New questions for creating a dating match profile:
+    // New questions geared towards Gen Z and Millennials
+    {
+        field: 'favoriteMeme',
+        question: "What's the meme that always cracks you up?",
+        placeholder: "e.g., Distracted Boyfriend, Doge, etc.",
+    },
+    {
+        field: 'favoriteApp',
+        question: "Which social media app do you live on?",
+        placeholder: "e.g., Instagram, TikTok, Twitter",
+    },
+    {
+        field: 'favoriteStreaming',
+        question: "What's your go-to streaming service?",
+        placeholder: "e.g., Netflix, Hulu, Disney+",
+    },
+    {
+        field: 'favoriteSong',
+        question: "What's that one song you can't stop playing?",
+        placeholder: "e.g., 'Blinding Lights' by The Weeknd",
+    },
+    // Additional questions for dating match profile:
     {
         field: 'relationshipGoals',
         question: "What are your relationship goals? (e.g., casual, serious, friendship)",

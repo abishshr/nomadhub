@@ -19,8 +19,44 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import LoadingScreen from './LoadingScreen';
 
 const { width } = Dimensions.get('window');
+
+// PhotoLoader component: displays a mini loading screen while the image loads.
+// PhotoLoader Component
+const PhotoLoader = ({
+                         uri,
+                         containerStyle,
+                         imageStyle,
+                     }: {
+    uri?: string;
+    containerStyle?: any;
+    imageStyle?: any;
+}) => {
+    const [loading, setLoading] = useState(true);
+    return (
+        <View style={[containerStyle, { justifyContent: 'center', alignItems: 'center' }]}>
+            {loading && (
+                <View
+                    style={[
+                        StyleSheet.absoluteFill,
+                        { justifyContent: 'center', alignItems: 'center', transform: [{ scale: 0.5 }] },
+                    ]}
+                >
+                    <LoadingScreen mini />
+                </View>
+            )}
+            <Image
+                source={{ uri }}
+                style={[imageStyle, { opacity: loading ? 0 : 1 }]}
+                onLoadStart={() => setLoading(true)}
+                onLoadEnd={() => setLoading(false)}
+            />
+        </View>
+    );
+};
+
 
 export type UserProfile = {
     name?: string;
@@ -157,7 +193,7 @@ export default function ProfileScreen() {
         }
     };
 
-    // For editing bio – using Alert.prompt (iOS demo; replace with a custom modal for cross-platform)
+    // For editing bio – using Alert.prompt (iOS demo; consider a custom modal for cross-platform)
     const editBio = () => {
         Alert.prompt(
             'Edit Bio',
@@ -172,19 +208,12 @@ export default function ProfileScreen() {
                     });
             },
             'plain-text',
-            bio || ''
+            userData.bio || ''
         );
     };
 
     if (loading) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color="#5865F2" />
-                    <Text style={styles.loaderText}>Loading Profile...</Text>
-                </View>
-            </SafeAreaView>
-        );
+        return <LoadingScreen />;
     }
     if (error) {
         return (
@@ -219,7 +248,7 @@ export default function ProfileScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            {/* Header with Logout Icon (Relative Positioning) */}
+            {/* Header with Logout Icon */}
             <View style={styles.header}>
                 <View style={styles.headerSpacer} />
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -228,10 +257,12 @@ export default function ProfileScreen() {
             </View>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <View style={styles.container}>
-                    {/* Main Profile Photo with overlay edit icon */}
+                    {/* Main Profile Photo with overlay edit icon using PhotoLoader */}
                     <View style={styles.photoWrapper}>
                         {photoURL ? (
-                            <Image source={{ uri: photoURL }} style={styles.avatar} />
+                            <View style={styles.avatarWrapper}>
+                                <PhotoLoader uri={photoURL} containerStyle={styles.avatarWrapper} imageStyle={styles.avatar} />
+                            </View>
                         ) : (
                             <View style={[styles.avatar, styles.noAvatar]}>
                                 <Text style={styles.noAvatarText}>No Photo</Text>
@@ -241,7 +272,7 @@ export default function ProfileScreen() {
                             style={styles.editIconOverlay}
                             onPress={() => pickImageForField('profilePhotos', 'photoURL')}
                         >
-                            <MaterialCommunityIcons name="pencil-outline" size={18} color="#fff" />
+                            <MaterialCommunityIcons name="pencil-outline" size={18} color="#007bff" />
                         </TouchableOpacity>
                     </View>
 
@@ -256,22 +287,16 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Additional Photos Grid (with integrated "Add Photo" cell) */}
+                    {/* Additional Photos Grid */}
                     <View style={styles.photoGrid}>
                         {(additionalPhotos || []).map((photoUri, idx) => (
                             <View key={idx} style={styles.photoWrapperSmall}>
-                                {photoUri ? (
-                                    <Image source={{ uri: photoUri }} style={styles.additionalPhoto} />
-                                ) : (
-                                    <View style={[styles.additionalPhoto, styles.noPhoto]}>
-                                        <Text style={styles.noAvatarText}>No Photo</Text>
-                                    </View>
-                                )}
+                                <PhotoLoader uri={photoUri} containerStyle={styles.photoWrapperSmall} imageStyle={styles.additionalPhoto} />
                                 <TouchableOpacity
                                     style={styles.editIconOverlaySmall}
                                     onPress={() => pickImageForField('additionalPhotos', 'additionalPhotos', idx)}
                                 >
-                                    <MaterialCommunityIcons name="pencil-outline" size={14} color="#fff" />
+                                    <MaterialCommunityIcons name="pencil-outline" size={14} color="#007bff" />
                                 </TouchableOpacity>
                             </View>
                         ))}
@@ -381,19 +406,22 @@ const styles = StyleSheet.create({
     loaderText: { marginTop: 8, fontSize: 16, color: '#555' },
     errorText: { color: 'red', fontSize: 14, textAlign: 'center', marginHorizontal: 20 },
     container: { alignItems: 'center', padding: 20 },
-    // Header Container with Logout Icon
+    // Header with Logout Icon
     header: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
+        width: '100%',
         paddingHorizontal: 20,
         paddingVertical: 10,
     },
     logoutButton: {
-        // No background color, simple icon
+        // No background color, simple icon.
     },
+    headerSpacer: { flex: 1 },
     // Main Profile Photo & Edit Overlay
-    photoWrapper: { position: 'relative' },
+    photoWrapper: { position: 'relative', marginBottom: 10 },
+    avatarWrapper: { position: 'relative' },
     avatar: { width: 150, height: 150, borderRadius: 10, backgroundColor: '#eee', resizeMode: 'cover' },
     noAvatar: { justifyContent: 'center', alignItems: 'center' },
     noAvatarText: { color: '#aaa' },
@@ -406,10 +434,16 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 4,
     },
+    imageLoaderOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.5)',
+    },
     // Additional Photos Grid
     photoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: 15 },
     photoWrapperSmall: { position: 'relative', margin: 5 },
-    additionalPhoto: { width: 80, height: 80, borderRadius: 8, backgroundColor: 'transparent' },
+    additionalPhoto: { width: 80, height: 80, borderRadius: 8, backgroundColor: 'transparent', resizeMode: 'cover' },
     noPhoto: { justifyContent: 'center', alignItems: 'center' },
     editIconOverlaySmall: {
         position: 'absolute',
@@ -419,7 +453,6 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 2,
     },
-    // "Add Photo" Cell integrated into grid
     addPhotoCell: {
         justifyContent: 'center',
         alignItems: 'center',
@@ -432,15 +465,10 @@ const styles = StyleSheet.create({
     // Bio Section
     bioContainer: {
         width: '100%',
-        backgroundColor: '#fff',
+        backgroundColor: 'transparent',
         borderRadius: 12,
         padding: 12,
         marginVertical: 10,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
